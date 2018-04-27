@@ -221,18 +221,8 @@ split;intros.
     inversion H0.
     * subst;auto.
     * apply IHl;auto.
-- induction l.
-  + auto.
-  + simpl.
-    f_equal.
-    * apply H.
-      constructor.
-      auto.
-    * apply IHl.
-      intros.
-      apply H.
-      apply in_cons.
-      auto.
+- apply map_ext_in.
+  auto.
 Qed.
 
 Lemma combine_step : forall A B (x : A) xs (y:B) ys,
