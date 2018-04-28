@@ -10,7 +10,7 @@ Require Import rollingsum.
 Require Import seqi.
 
 Definition fv (l : list Z) (i : nat) : Z :=
-  Zabs(sum (firstn i l) - sum (skipn i l)).
+  Z.abs(sum (firstn i l) - sum (skipn i l)).
 
 Open Scope Z_scope.
 
@@ -18,7 +18,7 @@ Open Scope Z_scope.
 Definition fulcrumRS (input : list Z) : list Z :=
   let sl := rollingSum input in
   let sr := rev (rollingSum (rev input)) in
-  map (fun p => Zabs (fst p - snd p)) (combine sl sr)
+  map (fun p => Z.abs (fst p - snd p)) (combine sl sr)
 .
 
 Definition fulcrum (input : list Z) : option (nat * Z) :=
@@ -62,7 +62,7 @@ destruct (Nat.eq_dec x 0).
   rewrite <- sum_rev.
   auto.
 * assert(L: (length input > 0)%nat). { destruct input. contradiction. simpl. omega. }
-  rewrite (first_skip_rev _ (length input - x)%nat).
+  rewrite firstn_skipn_rev with (x := (length input - x)%nat).
   rewrite rev_involutive.
   rewrite <- sum_rev.
   rewrite rev_length.

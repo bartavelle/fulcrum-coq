@@ -18,7 +18,7 @@ Lemma seqi_bound : forall n x, n > 0 -> In x (seqi n) <-> 0 <= x <= n.
 Proof.
 intros. unfold seqi.
 pose proof (in_seq (n+1) 0 x).
-replace (0 + (n + 1)) with (n+1) in H0;try omega.
+simpl in H0.
 destruct H0.
 split;intros.
 * destruct (H0 H2). omega.
@@ -43,19 +43,6 @@ simpl.
 auto.
 Qed.
 
-Lemma seq_last: forall s l,
-  seq s (S l) = seq s l ++ [s + l].
-Proof.
-intros. simpl.
-generalize dependent s.
-induction l;intros;simpl.
-* rewrite Nat.add_0_r. auto.
-* f_equal;auto.
-  rewrite IHl.
-  replace (S s + l) with (s + S l) by omega.
-  auto.
-Qed.
-
 Theorem seqi_last: forall n,
   seqi (S n) = seqi n ++ [S n].
 Proof.
@@ -63,32 +50,63 @@ intros.
 unfold seqi.
 replace (S n + 1) with (S (n+1)) by omega.
 rewrite seq_last.
-simpl.
+rewrite Nat.add_0_r.
 replace (n + 1) with (S n) by omega.
 auto.
+Qed.
+
+Theorem list_nth_eq: forall A (l1 : list A) l2,
+  length l1 = length l2 ->
+      l1 = l2 <-> (forall n def, n < length l1 -> nth n l1 def = nth n l2 def).
+Proof.
+intros.
+split;intros.
+* subst. auto.
+* generalize dependent l2.
+  induction l1;intros.
+  + simpl in H. destruct l2;auto. inversion H.
+  + destruct l2. inversion H.
+    simpl in H. inversion H. clear H.
+    f_equal.
+    - pose proof (H0 0). simpl in H. apply (H a). omega.
+    - apply IHl1;auto.
+      intros.
+      pose proof (H0 (S n)).
+      simpl in H1.
+      apply H1.
+      omega.
+Qed.
+
+Theorem nth_replace_def {A} : forall n (l : list A) def1 def2,
+  n < length l -> nth n l def1 = nth n l def2.
+Proof.
+induction n;intros.
+* destruct l. inversion H. simpl. auto.
+* destruct l. inversion H. simpl in *.
+  apply IHn. omega.
 Qed.
 
 Theorem rev_seq: forall s l,
   rev (seq s l) = map (fun x => s*2 + l - x - 1) (seq s l).
 Proof.
 intros.
-generalize dependent s.
-induction l;intros.
-* simpl. auto.
-* simpl seq at 2.
-  rewrite map_cons.
-  rewrite <- seq_shift.
-  rewrite map_map.
-  replace (map (fun x : nat => s * 2 + S l - S x - 1) (seq s l))
-     with (map (fun x : nat => s * 2 +   l -   x - 1) (seq s l)).
-  rewrite <- IHl.
-  rewrite seq_last.
-  rewrite rev_app_distr.
-  simpl.
-  f_equal. omega.
-
-  apply map_eq. intros.
-  omega.
+set (f := (fun x : nat => s * 2 + l - x - 1)).
+apply list_nth_eq.
+* rewrite rev_length.
+  rewrite map_length.
+  auto.
+* intros.
+  rewrite rev_length in H.
+  rewrite rev_nth;auto.
+  rewrite seq_length.
+  destruct l. simpl. destruct n;auto.
+  rewrite seq_nth;try omega.
+  rewrite nth_replace_def with (def2 := f n).
+  + rewrite map_nth.
+    rewrite seq_length in H.
+    rewrite seq_nth by omega.
+    unfold f. omega.
+  + rewrite map_length. auto.
 Qed.
 
 Theorem rev_seqi: forall n,
@@ -143,12 +161,12 @@ induction l;intros.
   destruct H0.
   + apply IHl. auto.
   + simpl in H0.
-    destruct (f (s + l)%nat =? e)%Z eqn:F.
+    destruct (f (l + s)%nat =? e)%Z eqn:F.
     - rewrite map_length in H0.
       rewrite seq_length in H0.
       inversion H0. clear H0.
       apply Z.eqb_eq in F.
-      replace (k + l + s - k)%nat with (s + l) by omega.
+      replace (k + l + s - k)%nat with (l + s) by omega.
       omega.
     - inversion H0.
 Qed.

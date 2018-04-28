@@ -160,67 +160,12 @@ Qed.
 Close Scope Z_scope.
 
 (* extra firstn / skipn properties *)
-Lemma firstn_hd: forall A (x : A) xs n,
-  firstn (n+1) (x::xs) = x :: firstn n xs.
-Proof.
-intros.
-replace (n+1) with (S n);try omega.
-simpl.
-auto.
-Qed.
-
-Lemma skipn_length : forall A (l : list A),
-  skipn (length l) l = nil.
-Proof.
-induction l;intros;auto.
-Qed.
-
-Lemma skipn_app: forall A x (l1 : list A) l2,
-  (x <= length l1)
-  -> skipn x (l1 ++ l2) = skipn x l1 ++ l2.
-Proof.
-intros.
-generalize dependent x.
-generalize dependent l2.
-induction l1;intros;simpl.
-* simpl in H. replace x with 0 by omega. simpl. auto.
-* destruct x;simpl;auto.
-  apply IHl1.
-  simpl in H.
-  omega.
-Qed.
-
-Lemma first_skip_rev: forall A x (l : list A),
-  (x < length l)->
-  firstn x l = rev (skipn (length l - x) (rev l)).
-Proof.
-induction x;intros;simpl.
-* rewrite Nat.sub_0_r. rewrite <- rev_length. rewrite skipn_length. auto.
-* destruct l;auto.
-  simpl.
-  replace (rev l ++ [a]) with (rev ([a] ++ l)) by auto.
-  rewrite rev_app_distr.
-  rewrite <- rev_length.
-  simpl in H.
-  rewrite skipn_app;try omega.
-  rewrite rev_length.
-  rewrite rev_app_distr.
-  simpl.
-  rewrite <- IHx;try omega.
-  auto.
-Qed.
-
 (* map/combine properties *)
 Theorem map_eq : forall A B (f : A -> B) (g : A -> B) (l : list A),
   map f l = map g l <-> (forall x, In x l -> f x = g x).
 Proof.
 split;intros.
-- induction l.
-  + inversion H0.
-  + inversion H.
-    inversion H0.
-    * subst;auto.
-    * apply IHl;auto.
+- eapply ext_in_map. apply H. auto.
 - apply map_ext_in.
   auto.
 Qed.
