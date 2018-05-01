@@ -92,19 +92,6 @@ Inductive Model : list Z -> nat -> nat -> nat -> Z -> Prop :=
      Model lst (S n) curbest best v -> Model lst n curbest best v
  .
 
-Theorem Model_invariants:
-  forall lst curbest curn n v,
-    Model lst curn curbest n v ->
-      (curbest <= curn /\ n >= curbest /\ curn <= length lst /\ curbest <= length lst /\ n <= length lst)%nat
-                      /\ v = fv lst n.
-Proof.
-intros.
-induction H.
-* subst. repeat (split;try omega).
-* repeat (split;try omega).
-* repeat (split;try omega).
-Qed.
-
 Example test_hypo2:
   let lst := [3;7;-4;8;2] in
     forall n v,
@@ -131,6 +118,39 @@ split;intros.
   + simpl in H20. omega.
 Qed.
 
+Lemma sum_fv_artifacts: forall s l,
+  s + sum l - s = sum l.
+Proof. intros. omega. Qed.
+
+Lemma skipnS {A} : forall lst (x : A) xs curn, x :: xs = skipn curn lst -> xs = skipn (S curn) lst.
+Proof.
+intros.
+replace (S curn) with (1+curn)%nat by omega.
+rewrite <- skipn_comp.
+rewrite <- H.
+auto.
+Qed.
+
+Lemma uncons_eq {A} : forall (x : A) xs ys,
+   x::xs = x::ys <-> xs=ys.
+Proof.
+split;intros.
+* inversion H. auto.
+* f_equal. auto.
+Qed.
+
+Lemma firstnS {A} : forall lst (x : A) xs curn, x :: xs = skipn curn lst ->
+     firstn (S curn) lst = firstn curn lst ++ [x].
+Proof.
+induction lst; intros.
+* rewrite skipn_nil in H. inversion H.
+* simpl. destruct curn.
+  + simpl. simpl in H. inversion H. auto.
+  + simpl firstn at 2. replace ((a :: firstn curn lst) ++ [x]) with (a:: (firstn curn lst ++ [x])) by auto.
+    erewrite <- IHlst. auto.
+    simpl in H. apply H.
+Qed.
+
 Theorem Model_equivalent :
   forall lst n v curn curbest,
     (curn <= length lst)%nat ->
@@ -138,56 +158,87 @@ Theorem Model_equivalent :
     (curbest <= curn)%nat ->
     fulcrum_inside (sum (firstn curn lst)) (sum (skipn curn lst)) curn curbest (fv lst curbest) (skipn curn lst) = (n,v) <->
       Model lst curn curbest n v.
-Proof.
-split;intros.
-{ remember (skipn curn lst) as remaining.
+Proof with auto.
+split.
+{ 
+  (* induction is performed on [skipn curn lst] so that [curn] and [lst] advance in lockstep *)
+  remember (skipn curn lst) as remaining.
   generalize dependent curn. generalize dependent v. 
   generalize dependent n. generalize dependent lst.
   generalize dependent curbest.
   induction remaining as [|x xs];intros;simpl in H0.
-  * inversion H2. symmetry in Heqremaining.
+  * (* empty remaining list, we are in the SimpleEnd case *)
+    inversion H2. symmetry in Heqremaining.
     apply skipn_all_2 in Heqremaining.
     assert(curn = length lst). omega.
     apply SimpleEnd;auto.
     omega.
-  * simpl in H2.
-    replace (x + sum xs - x) with (sum xs) in *;try omega.
+  * (* some data is remaining, we are in a normal step *)
+    simpl in H2.
+    rewrite sum_fv_artifacts in H2.
+    (* either the current diff is lower than the best diff, or it is not *)
     destruct (Z.abs (sum (firstn curn lst) + x - sum xs) <? fv lst curbest) eqn:F.
-    + apply Z.ltb_lt in F.
+    + (* SimpleChange situation *)
+      apply Z.ltb_lt in F.
+      (* if curn = length lst, it means we are at the final step, which is not possible, so we prove otherwise *)
       destruct (curn =? length lst)%nat eqn:CN.
       - apply Nat.eqb_eq in CN.
         rewrite CN in Heqremaining.
         rewrite skipn_all in Heqremaining.
         inversion Heqremaining.
-      - pose proof (firstn_skipn curn lst) as FN.
-        assert(FN_a : firstn (S curn) lst = firstn curn lst ++ [x]). admit.
-        assert(SN_a: skipn (S curn) lst = xs). admit.
-        apply Nat.eqb_neq in CN.
-        
+      - apply Nat.eqb_neq in CN.
         apply SimpleChange;try omega;auto.
         unfold fv at 1.
-        rewrite SN_a.
-        rewrite FN_a.
+        rewrite (firstnS lst x xs);auto.
+        rewrite <- (skipnS lst x xs);auto.
         rewrite <- sum_distributive.
-        simpl. rewrite Z.add_0_r. auto.
-
-        apply IHxs;auto;try omega.
-        rewrite FN_a.
+        simpl. rewrite Z.add_0_r...
+        { apply IHxs;auto;try omega.
+          * apply (skipnS _ _ _ _ Heqremaining).
+          * rewrite (firstnS lst x xs);auto.
+            rewrite <- sum_distributive. simpl. rewrite Z.add_0_r.
+            replace (fv lst (S curn)) with (Z.abs (sum (firstn curn lst) + x - sum xs));auto.
+            unfold fv.
+            rewrite (firstnS lst x xs);auto.
+            rewrite <- (skipnS lst x xs);auto.
+            rewrite <- sum_distributive.
+            f_equal.
+            simpl.
+            omega.
+        }
+   + (* SimpleStay situation *)
+      apply Z.ltb_ge in F.
+      (* if curn = length lst, it means we are at the final step, which is not possible, so we prove otherwise *)
+      destruct (curn =? length lst)%nat eqn:CN.
+      - apply Nat.eqb_eq in CN.
+        rewrite CN in Heqremaining.
+        rewrite skipn_all in Heqremaining.
+        inversion Heqremaining.
+      - apply Nat.eqb_neq in CN.
+        apply SimpleStay;try omega;auto.
+        unfold fv at 1.
+        rewrite (firstnS lst x xs);auto.
+        rewrite <- (skipnS lst x xs);auto.
         rewrite <- sum_distributive.
-        simpl. rewrite Z.add_0_r.
-        replace (fv lst (S curn)) with (Z.abs (sum (firstn curn lst) + x - sum xs)).
-        auto.
-        unfold fv.
-        rewrite FN_a.
-        rewrite SN_a.
-        rewrite <- sum_distributive.
-        simpl. f_equal. omega.
-   + admit.
+        simpl. rewrite Z.add_0_r. omega.
+        { apply IHxs;auto;try omega.
+          * apply (skipnS _ _ _ _ Heqremaining).
+          * rewrite (firstnS lst x xs);auto.
+            rewrite <- sum_distributive. simpl. rewrite Z.add_0_r.
+            replace (fv lst (S curn)) with (Z.abs (sum (firstn curn lst) + x - sum xs));auto.
+            unfold fv.
+            rewrite (firstnS lst x xs);auto.
+            rewrite <- (skipnS lst x xs);auto.
+            rewrite <- sum_distributive.
+            f_equal.
+            simpl.
+            omega.
+        }
 } {
 
 remember (skipn curn lst) as remaining eqn:REM.
 remember (firstn curn lst) as processed eqn:PRO.
-assert(PROREM: processed ++ remaining = lst). rewrite REM. rewrite PRO. apply firstn_skipn.
+(*assert(PROREM: processed ++ remaining = lst). rewrite REM. rewrite PRO. apply firstn_skipn.*)
 
 generalize dependent n.
 generalize dependent v.
@@ -196,43 +247,116 @@ generalize dependent curn.
 generalize dependent lst.
 generalize processed.
 induction remaining;intros.
-* admit.
+* simpl.
+  symmetry in REM.
+  apply skipn_all_2 in REM.
+  assert(F: curn = length lst). omega.
+  rewrite F in H2.
+  inversion H2;subst;auto;omega.
 * clear processed.
   destruct curn.
-  + replace curbest with O in *;try omega.
+  + (* curn = 0 *)
+    replace curbest with O in * by omega.
     simpl.
-    replace (a + sum remaining - a) with (sum remaining);try omega.
+    rewrite sum_fv_artifacts.
     inversion H2;subst.
-    - rewrite app_length in H4.
-      simpl in H4. omega.
-    - simpl in PRO. simpl in REM. rewrite PRO in *. simpl in *. clear PRO. clear processed0.
-      replace (Z.abs (a - sum remaining)) with (fv (a :: remaining) 1).
+    - simpl in REM. rewrite <- REM in H4.
+      inversion H4.
+    - (* SimpleChange *)
+      simpl in *.
       apply Z.ltb_lt in H4.
+      replace (Z.abs (a - sum remaining)) with (fv lst 1).
       rewrite H4.
-      replace a with (sum [a]) at 1.
-      apply IHremaining;auto.
-      simpl. rewrite Z.add_0_r. auto.
-      rewrite fv_step. simpl. rewrite Z.add_0_r. auto.
-    - admit.
-  + inversion H2;subst.
+      replace a with (sum [a]) at 1 by (simpl;omega).
+      apply IHremaining;auto;try (rewrite <- REM; auto).
+      rewrite <- REM.
+      rewrite fv_step. simpl. f_equal. omega.
+    - (* SimpleKeep *)
+      simpl in *.
+      Search ( _ < _ )%Z.
+      apply Z.ge_le in H4.
+      apply Z.ltb_ge in H4.
+      replace (Z.abs (a - sum remaining)) with (fv lst 1).
+      rewrite H4.
+      replace a with (sum [a]) at 1 by (simpl;omega).
+      apply IHremaining;auto;try (rewrite <- REM; auto).
+      rewrite <- REM.
+      rewrite fv_step. simpl. f_equal. omega.
+  + (* curn > 0 *)
+    pose proof (firstn_skipn (S curn) lst) as APP.
+    rewrite <- REM in APP.
+    inversion H2;subst.
     - rewrite H4 in REM.
       rewrite skipn_all in REM.
       inversion REM.
-    - simpl.
-      replace (Z.abs (sum processed0 + a - (a + sum remaining - a))) with (fv (processed0 ++ a :: remaining) (S (S curn))).
+    - (* SimpleChange *)
+      unfold fulcrum_inside.
+      fold fulcrum_inside.
+      replace (Z.abs (sum (firstn (S curn) lst) + a - (sum (a::remaining) - a))) with (fv ((firstn (S curn) lst) ++ a :: remaining) (S (S curn))).
+      rewrite APP.
       apply Z.ltb_lt in H4.
       rewrite H4.
-      replace (a + sum remaining - a) with (sum remaining) by omega.
-      replace (sum processed0 + a) with (sum (processed0 ++ [a])).
+      replace (sum (a::remaining) - a) with (sum remaining) by (simpl;omega).
+      replace (sum (firstn (S curn) lst) + a) with (sum ((firstn (S curn) lst) ++ [a])).
       apply IHremaining;auto.
-      rewrite <- app_assoc. auto.
-      replace (S (S curn)) with (1 + S curn)%nat by omega.
-      rewrite <- skipn_comp.
-      rewrite <- REM. auto.
-      admit.
-      admit.
-      admit.
-    - admit.
+      eapply skipnS. apply REM.
+      erewrite <- firstnS. auto. apply REM.
+      rewrite <- sum_distributive. simpl sum at 2. omega.
+      remember (firstn (S curn) lst) as processed eqn:PRO.
+      assert(length processed = S curn).
+      rewrite PRO.
+      rewrite firstn_length.
+      Search(Init.Nat.min).
+      apply Nat.min_l. auto.
+      (* :( *)
+      unfold fv.
+      erewrite firstnS. 2: { rewrite APP. apply REM. }
+      erewrite <- skipnS. 2: {rewrite APP. apply REM. }
+      rewrite firstn_app.
+      rewrite <- H7 at 1.
+      rewrite firstn_all.
+      rewrite H7.
+      rewrite Nat.sub_diag. simpl.
+      f_equal.
+      rewrite <- sum_distributive.
+      rewrite <- sum_distributive.
+      simpl.
+      omega.
+    - (* SimpleStay *)
+      unfold fulcrum_inside.
+      fold fulcrum_inside.
+      replace (Z.abs (sum (firstn (S curn) lst) + a - (sum (a::remaining) - a))) with (fv ((firstn (S curn) lst) ++ a :: remaining) (S (S curn))).
+      rewrite APP.
+      apply Z.ge_le in H4.
+      apply Z.ltb_ge in H4.
+      rewrite H4.
+      replace (sum (a::remaining) - a) with (sum remaining) by (simpl;omega).
+      replace (sum (firstn (S curn) lst) + a) with (sum ((firstn (S curn) lst) ++ [a])).
+      apply IHremaining;auto.
+      eapply skipnS. apply REM.
+      erewrite <- firstnS. auto. apply REM.
+      rewrite <- sum_distributive. simpl sum at 2. omega.
+      remember (firstn (S curn) lst) as processed eqn:PRO.
+      assert(length processed = S curn).
+      rewrite PRO.
+      rewrite firstn_length.
+      Search(Init.Nat.min).
+      apply Nat.min_l. auto.
+      (* :( *)
+      unfold fv.
+      erewrite firstnS. 2: { rewrite APP. apply REM. }
+      erewrite <- skipnS. 2: {rewrite APP. apply REM. }
+      rewrite firstn_app.
+      rewrite <- H7 at 1.
+      rewrite firstn_all.
+      rewrite H7.
+      rewrite Nat.sub_diag. simpl.
+      f_equal.
+      rewrite <- sum_distributive.
+      rewrite <- sum_distributive.
+      simpl.
+      omega.
+}
 Qed.
 
 
