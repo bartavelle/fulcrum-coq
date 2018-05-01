@@ -184,3 +184,65 @@ induction l;auto.
 simpl. f_equal;auto.
 Qed.
 
+
+Theorem firstn_nil : forall A n, firstn n (nil : list A) = nil.
+Proof.
+destruct n;auto.
+Qed.
+
+Theorem skipn_nil : forall A n, skipn n (nil : list A) = nil.
+Proof.
+destruct n;auto.
+Qed.
+
+Theorem skipn_all_2 : forall A (l : list A) n,
+ (n >= length l)%nat <-> skipn n l = nil.
+Proof.
+split.
+{ generalize dependent n.
+
+induction l;intros.
+* apply skipn_nil.
+* destruct n. inversion H.
+  simpl in H.
+  simpl.
+  apply IHl.
+  omega.
+}
+{ generalize dependent n.
+induction l;intros.
+* simpl. omega.
+* destruct n. inversion H.
+  simpl.
+  simpl in H.
+  pose proof (IHl _ H).
+  omega.
+}
+Qed.
+
+Theorem firstn_all_2 : forall A (l : list A) n,
+ (n >= length l)%nat -> firstn n l = l.
+Proof.
+induction l;intros.
+* apply firstn_nil.
+* destruct n. inversion H.
+  simpl in H.
+  simpl.
+  f_equal.
+  apply IHl.
+  omega.
+Qed.
+
+
+Lemma skipn_comp: forall A (l : list A) a b,
+  skipn a (skipn b l) = skipn (a + b) l.
+Proof.
+induction l;intros.
+* repeat (rewrite skipn_nil). auto.
+* destruct b.
+ + simpl. rewrite Nat.add_0_r. auto.
+ + simpl.
+   rewrite  Nat.add_succ_r.
+   simpl.
+   apply IHl.
+Qed.
